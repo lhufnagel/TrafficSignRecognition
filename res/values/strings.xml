@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OCV Face Detection</string>
+    <string name="app_name">Stop-Sign Detection</string>
+    <string name="action_toggle">Toggle map</string>
+
 </resources>

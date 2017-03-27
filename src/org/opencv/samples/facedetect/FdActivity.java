@@ -21,19 +21,31 @@ import org.opencv.objdetect.CascadeClassifier;
 import org.opencv.imgproc.Imgproc;
 
 import android.app.Activity;
+import android.support.v7.app.AppCompatActivity;
 import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.WindowManager;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 
-public class FdActivity extends Activity implements CvCameraViewListener2 {
+
+import com.mapbox.mapboxsdk.Mapbox;
+import com.mapbox.mapboxsdk.maps.MapView;
+import com.mapbox.mapboxsdk.maps.MapboxMap;
+import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
+
+public class FdActivity extends AppCompatActivity implements CvCameraViewListener2 {
 
     private static final String    TAG                 = "OCVSample::Activity";
     private static final Scalar    FACE_RECT_COLOR     = new Scalar(0, 255, 0, 255);
     public static final int        JAVA_DETECTOR       = 0;
     public static final int        NATIVE_DETECTOR     = 1;
+    
+    private boolean 			   mMapShown;
 
     private MenuItem               mItemFace50;
     private MenuItem               mItemFace40;
@@ -54,6 +66,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
     private int                    mAbsoluteFaceSize   = 0;
 
     private CameraBridgeViewBase   mOpenCvCameraView;
+    private MapView				   mMapView;
 
     private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -121,13 +134,32 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
     public void onCreate(Bundle savedInstanceState) {
         Log.i(TAG, "called onCreate");
         super.onCreate(savedInstanceState);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        Mapbox.getInstance(this, "pk.eyJ1IjoibGh1Zm5hZ2VsIiwiYSI6ImNqMHJ0cHA4eDAybWQyeG5wODNvbnF4anEifQ.eQZt_Nq9U8EjUe2tO9unVQ");
 
         setContentView(R.layout.face_detect_surface_view);
+
+        mMapView = (MapView) findViewById(R.id.mapView);
+        mMapView.onCreate(savedInstanceState);
+        mMapView.getMapAsync(new OnMapReadyCallback() {
+          @Override
+          public void onMapReady(MapboxMap mapboxMap) {
+
+            // Customize map with markers, polylines, etc.
+
+          }
+        });
+        
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
 
         mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.fd_activity_surface_view);
         mOpenCvCameraView.setVisibility(CameraBridgeViewBase.VISIBLE);
         mOpenCvCameraView.setCvCameraViewListener(this);
+        
+
+       mMapView.setVisibility(View.GONE);
+       mMapShown = false;
+
     }
 
     @Override
@@ -136,8 +168,35 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
         super.onPause();
         if (mOpenCvCameraView != null)
             mOpenCvCameraView.disableView();
+        
+        mMapView.onPause();
     }
-
+    
+    // Add the mapView lifecycle to the activity's lifecycle methods
+    @Override
+    protected void onStart() {
+      super.onStart();
+      mMapView.onStart();
+    }
+    
+    @Override
+    protected void onStop() {
+      super.onStop();
+      mMapView.onStop();
+    }
+    
+    @Override
+    public void onLowMemory() {
+      super.onLowMemory();
+      mMapView.onLowMemory();
+    }
+    
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+      super.onSaveInstanceState(outState);
+      mMapView.onSaveInstanceState(outState);
+    }
+    
     @Override
     public void onResume()
     {
@@ -149,11 +208,14 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             Log.d(TAG, "OpenCV library found inside package. Using it!");
             mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         }
+        
+        mMapView.onResume();
     }
 
     public void onDestroy() {
         super.onDestroy();
         mOpenCvCameraView.disableView();
+        mMapView.onDestroy();
     }
 
     public void onCameraViewStarted(int width, int height) {
@@ -209,6 +271,9 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
         mItemFace30 = menu.add("Face size 30%");
         mItemFace20 = menu.add("Face size 20%");
         mItemType   = menu.add(mDetectorName[mDetectorType]);
+        
+        getMenuInflater().inflate(R.menu.activity_crossfade, menu);
+
         return true;
     }
 
@@ -223,6 +288,10 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
             setMinFaceSize(0.3f);
         else if (item == mItemFace20)
             setMinFaceSize(0.2f);
+        else if (item.getItemId() == R.id.action_toggle){
+            mMapShown = !mMapShown;
+            showContentOrLoadingIndicator(mMapShown);
+        }
         else if (item == mItemType) {
             int tmpDetectorType = (mDetectorType + 1) % mDetectorName.length;
             item.setTitle(mDetectorName[tmpDetectorType]);
@@ -248,5 +317,39 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
                 mNativeDetector.stop();
             }
         }
+    }
+    
+
+    private void showContentOrLoadingIndicator(boolean contentLoaded) {
+        // Decide which view to hide and which to show.
+        final View showView = contentLoaded ? mMapView : mOpenCvCameraView;
+        final View hideView = contentLoaded ? mOpenCvCameraView : mMapView;
+
+        // Set the "show" view to 0% opacity but visible, so that it is visible
+        // (but fully transparent) during the animation.
+        showView.setAlpha(0f);
+        showView.setVisibility(View.VISIBLE);
+
+        // Animate the "show" view to 100% opacity, and clear any animation listener set on
+        // the view. Remember that listeners are not limited to the specific animation
+        // describes in the chained method calls. Listeners are set on the
+        // ViewPropertyAnimator object for the view, which persists across several
+        // animations.
+        showView.animate()
+                .alpha(1f)
+                .setDuration(1000)
+                .setListener(null);
+
+        // Animate the "hide" view to 0% opacity. After the animation ends, set its visibility
+        // to GONE as an optimization step (it won't participate in layout passes, etc.)
+        hideView.animate()
+                .alpha(0f)
+                .setDuration(1000)
+                .setListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        hideView.setVisibility(View.GONE);
+                    }
+                });
     }
 }

@@ -16,7 +16,7 @@ opencv_traincascade -vec merged.vec \
   -precalcIdxBufSize 8096 \
   -numPos 150 \
   -numNeg 600 \
-  -numStages 20 \
+  -numStages 15 \
   -featureType LBP \
   -w 30 -h 30 \
   -minHitRate 0.999 \
